@@ -112,7 +112,8 @@ DEFINE_string(benchmarks,
               "acquireload,"
               "fillseekseq,"
               "randomtransaction,"
-              "randomreplacekeys",
+              "randomreplacekeys,"
+			  "sktseq",
 
               "Comma-separated list of operations to run in the specified"
               " order. Available benchmarks:\n"
@@ -166,6 +167,8 @@ DEFINE_string(benchmarks,
               "\trandomreplacekeys     -- randomly replaces N keys by deleting "
               "the old version and putting the new version\n\n"
               "Meta operations:\n"
+			  "\tsktseq        -- write N values in sequential key"
+			  " with timestamp\n"
               "\tcompact     -- Compact the entire DB\n"
               "\tstats       -- Print DB stats\n"
               "\tlevelstats  -- Print the number of files and bytes per level\n"
@@ -2050,7 +2053,12 @@ class Benchmark {
         PrintStats("rocksdb.levelstats");
       } else if (name == "sstables") {
         PrintStats("rocksdb.sstables");
-      } else if (!name.empty()) {  // No error message for empty name
+      } else if (name == "sktseq") {
+		// [[ogh : SKT 
+        fresh_db = true;
+        method = &Benchmark::SktSeq;
+		// ]]ogh : SKT
+	  } else if (!name.empty()) {  // No error message for empty name
         fprintf(stderr, "unknown benchmark '%s'\n", name.c_str());
         exit(1);
       }
@@ -2732,6 +2740,12 @@ class Benchmark {
     DoWrite(thread, SEQUENTIAL);
   }
 
+  // [[ogh: SKT
+  void SktSeq(ThreadState* thread) {
+	  DoSKTBenchmark(thread, SEQUENTIAL);
+  }
+  // ]]ogh: SKT
+
   void WriteRandom(ThreadState* thread) {
     DoWrite(thread, RANDOM);
   }
@@ -2799,6 +2813,96 @@ class Benchmark {
       return &multi_dbs_[rand_int % multi_dbs_.size()];
     }
   }
+
+  // [[ogh: SKT
+  void DoSKTBenchmark(ThreadState* thread, WriteMode write_mode) {
+    const int test_duration = FLAGS_duration;
+    const int64_t num_ops = writes_ == 0 ? num_ : writes_;
+
+    size_t num_key_gens = 1;
+    if (db_.db == nullptr) {
+      num_key_gens = multi_dbs_.size();
+    }
+    std::vector<std::unique_ptr<KeyGenerator>> key_gens(num_key_gens);
+    int64_t max_ops = num_ops * num_key_gens;
+    int64_t ops_per_stage = max_ops;
+    if (FLAGS_num_column_families > 1 && FLAGS_num_hot_column_families > 0) {
+      ops_per_stage = (max_ops - 1) / (FLAGS_num_column_families /
+                                       FLAGS_num_hot_column_families) +
+                      1;
+    }
+
+    Duration duration(test_duration, max_ops, ops_per_stage);
+    for (size_t i = 0; i < num_key_gens; i++) {
+      key_gens[i].reset(new KeyGenerator(&(thread->rand), write_mode, num_,
+                                         ops_per_stage));
+    }
+
+    if (num_ != FLAGS_num) {
+      char msg[100];
+      snprintf(msg, sizeof(msg), "(%" PRIu64 " ops)", num_);
+      thread->stats.AddMessage(msg);
+    }
+
+    RandomGenerator gen;
+    WriteBatch batch;
+    Status s;
+    int64_t bytes = 0;
+
+    std::unique_ptr<const char[]> key_guard;
+    Slice key = AllocateKey(&key_guard);
+    int64_t stage = 0;
+    while (!duration.Done(entries_per_batch_)) {
+      if (duration.GetStage() != stage) {
+        stage = duration.GetStage();
+        if (db_.db != nullptr) {
+          db_.CreateNewCf(open_options_, stage);
+        } else {
+          for (auto& db : multi_dbs_) {
+            db.CreateNewCf(open_options_, stage);
+          }
+        }
+      }
+
+      size_t id = thread->rand.Next() % num_key_gens;
+      DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(id);
+      batch.Clear();
+
+      if (thread->shared->write_rate_limiter.get() != nullptr) {
+        thread->shared->write_rate_limiter->Request(
+            entries_per_batch_ * (value_size_ + key_size_),
+            Env::IO_HIGH);
+        // Set time at which last op finished to Now() to hide latency and
+        // sleep from rate limiter. Also, do the check once per batch, not
+        // once per write.
+        thread->stats.ResetLastOpTime();
+      }
+
+      for (int64_t j = 0; j < entries_per_batch_; j++) {
+        int64_t rand_num = key_gens[id]->Next();
+        GenerateKeyFromInt(rand_num, FLAGS_num, &key);
+        if (FLAGS_num_column_families <= 1) {
+          batch.Put(key, gen.Generate(value_size_));
+        } else {
+          // We use same rand_num as seed for key and column family so that we
+          // can deterministically find the cfh corresponding to a particular
+          // key while reading the key.
+          batch.Put(db_with_cfh->GetCfh(rand_num), key,
+                    gen.Generate(value_size_));
+        }
+        bytes += value_size_ + key_size_;
+      }
+      s = db_with_cfh->db->Write(write_options_, &batch);
+      thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db,
+                                entries_per_batch_, kWrite);
+      if (!s.ok()) {
+        fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+        exit(1);
+      }
+    }
+    thread->stats.AddBytes(bytes);
+  }
+  // ]]ogh: SKT
 
   void DoWrite(ThreadState* thread, WriteMode write_mode) {
     const int test_duration = write_mode == RANDOM ? FLAGS_duration : 0;
