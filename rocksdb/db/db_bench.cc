@@ -19,6 +19,10 @@ int main() {
 }
 #else
 
+// [[ogh: SKT
+#include "boost/date_time/posix_time/posix_time.hpp"
+// ]]ogh: SKT
+
 #ifdef NUMA
 #include <numa.h>
 #include <numaif.h>
@@ -166,9 +170,9 @@ DEFINE_string(benchmarks,
               "verify correctness\n"
               "\trandomreplacekeys     -- randomly replaces N keys by deleting "
               "the old version and putting the new version\n\n"
-              "Meta operations:\n"
 			  "\tsktseq        -- write N values in sequential key"
 			  " with timestamp\n"
+              "Meta operations:\n"
               "\tcompact     -- Compact the entire DB\n"
               "\tstats       -- Print DB stats\n"
               "\tlevelstats  -- Print the number of files and bytes per level\n"
@@ -1847,6 +1851,14 @@ class Benchmark {
     return Slice(key_guard->get(), key_size_);
   }
 
+  // [[ogh : SKT GenerateKeyFromSKT
+  void GenerateKeyFromSKT(char *s, Slice* key) {
+	  char *start = const_cast<char*>(key->data());
+	  char *pos = start;
+	  memcpy(pos, s, strlen(s));
+  }
+  // ]]ogh : SKT
+  
   // Generate key according to the given specification and random number.
   // The resulting key will have the following format (if keys_per_prefix_
   // is positive), extra trailing bytes are either cut off or paddd with '0'.
@@ -2056,6 +2068,7 @@ class Benchmark {
       } else if (name == "sktseq") {
 		// [[ogh : SKT 
         fresh_db = true;
+		write_options_.sync = false;
         method = &Benchmark::SktSeq;
 		// ]]ogh : SKT
 	  } else if (!name.empty()) {  // No error message for empty name
@@ -2733,18 +2746,13 @@ class Benchmark {
   }
 
   enum WriteMode {
-    RANDOM, SEQUENTIAL, UNIQUE_RANDOM
+	  //ogh: SKT. add SKT_SEQUENTIAL
+    RANDOM, SEQUENTIAL, UNIQUE_RANDOM, SKT_SEQUENTIAL,
   };
 
   void WriteSeq(ThreadState* thread) {
     DoWrite(thread, SEQUENTIAL);
   }
-
-  // [[ogh: SKT
-  void SktSeq(ThreadState* thread) {
-	  DoSKTBenchmark(thread, SEQUENTIAL);
-  }
-  // ]]ogh: SKT
 
   void WriteRandom(ThreadState* thread) {
     DoWrite(thread, RANDOM);
@@ -2754,6 +2762,52 @@ class Benchmark {
     DoWrite(thread, UNIQUE_RANDOM);
   }
 
+  // [[ogh: SKT
+#define NUM_SKT_KEYS (400*1000) // default: 400K
+  void SktSeq(ThreadState* thread) {
+	  DoSKTBenchmark(thread, SKT_SEQUENTIAL);
+  }
+
+  class SktTimeStamp {
+    public: 
+	  SktTimeStamp() 
+		  : t_(boost::posix_time::second_clock::local_time().date())
+	  {
+		  std::string temp = boost::posix_time::to_iso_string(t_);
+		  isoString_ = "";
+		  for (uint32_t i = 0 ;isoString_.size() < 12;i++) {
+			  if (temp[i] == ',') break;
+			  if (temp[i] != 'T') {
+				  isoString_ += temp[i];
+			  }
+		  }
+	  };
+
+	  SktTimeStamp Next()
+	  {
+		  t_ += boost::posix_time::minutes(10);
+		  std::string temp = boost::posix_time::to_iso_string(t_);
+		  isoString_ = "";
+		  for (uint32_t i = 0 ;isoString_.size() < 12;i++) {
+			  if (temp[i] == ',') break;
+			  if (temp[i] != 'T') {
+				  isoString_ += temp[i];
+			  }
+		  }
+		  return *this;
+	  };
+
+	  std::string toString() 
+	  {
+		  return isoString_;
+	  }
+
+    private:
+	  boost::posix_time::ptime t_;
+	  std::string isoString_;
+  };
+  // ]]ogh: SKT
+  
   class KeyGenerator {
    public:
     KeyGenerator(Random64* rand, WriteMode mode,
@@ -2761,7 +2815,8 @@ class Benchmark {
       : rand_(rand),
         mode_(mode),
         num_(num),
-        next_(0) {
+        next_(0), next2_(0) {
+			//ogh: SKT. needs unique random fields
       if (mode_ == UNIQUE_RANDOM) {
         // NOTE: if memory consumption of this approach becomes a concern,
         // we can either break it into pieces and only random shuffle a section
@@ -2771,11 +2826,62 @@ class Benchmark {
         for (uint64_t i = 0; i < num_; ++i) {
           values_[i] = i;
         }
+#if 0
         std::shuffle(
             values_.begin(), values_.end(),
             std::default_random_engine(static_cast<unsigned int>(FLAGS_seed)));
-      }
+#else 
+        std::random_shuffle(
+            values_.begin(), values_.end());
+#endif
+      } else if (mode_ == SKT_SEQUENTIAL) {
+		  /* [[ogh: SKT
+		   * To generate unique random keys for each fields */
+		uint64_t max_key = ((uint64_t)10000) * 10 * 10 * 200;
+		values_.resize(max_key);
+		for (uint64_t i = 0; i < max_key; ++i) {
+		  values_[i] = i;
+		}
+        std::shuffle(
+            values_.begin(), values_.end(),
+            std::default_random_engine(static_cast<unsigned int>(FLAGS_seed)));
+	  }
+	  //]]ogh: SKT 
     }
+
+	//[[ogh: SKT key generator
+	void SktNext(char* key) {
+	  uint64_t current_value = values_[next2_++];
+	  int f1;
+	  int f2;
+	  int f3;
+	  int f4;
+	  if (next_++ == NUM_SKT_KEYS) {
+	    next_ = 0; // initialize 
+		timestamp_.Next(); // add 10 minute;
+	  }
+
+	  if (next2_ == values_.size()) {
+        std::shuffle(
+            values_.begin(), values_.end(),
+            std::default_random_engine(static_cast<unsigned int>(FLAGS_seed)));
+		next2_ = 0;
+	  }
+
+	  f1 = (int)(current_value % 10000);
+	  current_value /= 10000;
+
+	  f2 = (int)(current_value % 10);
+	  current_value /= 10;
+
+	  f3 = (int)(current_value % 10);
+	  current_value /= 10;
+
+	  f4 = (int)(current_value % 200);
+	  sprintf(key,"%s:%d:%d:%d:%d",
+			  timestamp_.toString().c_str(), f1, f2, f3, f4);
+	}
+	//]]ogh: SKT
 
     uint64_t Next() {
       switch (mode_) {
@@ -2785,6 +2891,8 @@ class Benchmark {
           return rand_->Next() % num_;
         case UNIQUE_RANDOM:
           return values_[next_++];
+		case SKT_SEQUENTIAL:
+		  return 0;
       }
       assert(false);
       return std::numeric_limits<uint64_t>::max();
@@ -2796,6 +2904,10 @@ class Benchmark {
     const uint64_t num_;
     uint64_t next_;
     std::vector<uint64_t> values_;
+	//[[ogh : SKT
+	SktTimeStamp timestamp_;
+	uint64_t next2_;
+	//]]ogh : SKT
   };
 
   DB* SelectDB(ThreadState* thread) {
@@ -2850,8 +2962,10 @@ class Benchmark {
     int64_t bytes = 0;
 
     std::unique_ptr<const char[]> key_guard;
+	//TODO: ogh , allocate key size for each key 
     Slice key = AllocateKey(&key_guard);
     int64_t stage = 0;
+	char *sktKey = new char[32];
     while (!duration.Done(entries_per_batch_)) {
       if (duration.GetStage() != stage) {
         stage = duration.GetStage();
@@ -2868,6 +2982,7 @@ class Benchmark {
       DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(id);
       batch.Clear();
 
+#if 0
       if (thread->shared->write_rate_limiter.get() != nullptr) {
         thread->shared->write_rate_limiter->Request(
             entries_per_batch_ * (value_size_ + key_size_),
@@ -2877,19 +2992,17 @@ class Benchmark {
         // once per write.
         thread->stats.ResetLastOpTime();
       }
+#endif
 
       for (int64_t j = 0; j < entries_per_batch_; j++) {
-        int64_t rand_num = key_gens[id]->Next();
-        GenerateKeyFromInt(rand_num, FLAGS_num, &key);
-        if (FLAGS_num_column_families <= 1) {
-          batch.Put(key, gen.Generate(value_size_));
-        } else {
-          // We use same rand_num as seed for key and column family so that we
-          // can deterministically find the cfh corresponding to a particular
-          // key while reading the key.
-          batch.Put(db_with_cfh->GetCfh(rand_num), key,
-                    gen.Generate(value_size_));
-        }
+		key_gens[id]->SktNext(sktKey);
+        GenerateKeyFromSKT(sktKey, &key); //from string
+		// ogh: SKT. Adjust key_size_
+		// ogh: SKT. Adjust value_size_
+		key.size_ = strlen(sktKey);
+		value_size_ = (thread->rand.Next() % 900) + 100;
+
+		batch.Put(key, gen.Generate(value_size_));
         bytes += value_size_ + key_size_;
       }
       s = db_with_cfh->db->Write(write_options_, &batch);
@@ -2900,6 +3013,7 @@ class Benchmark {
         exit(1);
       }
     }
+	delete sktKey;
     thread->stats.AddBytes(bytes);
   }
   // ]]ogh: SKT

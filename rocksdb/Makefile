@@ -8,8 +8,11 @@
 
 CLEAN_FILES = # deliberately empty, so we can append below.
 CFLAGS += ${EXTRA_CFLAGS}
-CXXFLAGS += ${EXTRA_CXXFLAGS}
-LDFLAGS += $(EXTRA_LDFLAGS)
+#OGH: SKT. Add boost_date_time library 
+CXXFLAGS += ${EXTRA_CXXFLAGS} 
+
+
+LDFLAGS += $(EXTRA_LDFLAGS) -lboost_date_time
 MACHINE ?= $(shell uname -m)
 ARFLAGS = rs
 
@@ -35,7 +38,7 @@ quoted_perl_command = $(subst ','\'',$(perl_command))
 # `make install`
 
 # Set the default DEBUG_LEVEL to 1
-DEBUG_LEVEL?=1
+DEBUG_LEVEL?=0
 
 ifeq ($(MAKECMDGOALS),dbg)
 	DEBUG_LEVEL=2
@@ -184,7 +187,7 @@ PLATFORM_CXXFLAGS += -isystem $(GTEST_DIR)
 # This (the first rule) must depend on "all".
 default: all
 
-WARNING_FLAGS = -W -Wextra -Wall -Wsign-compare -Wshadow \
+WARNING_FLAGS = -W -Wextra -Wall -Wsign-compare \
   -Wno-unused-parameter
 
 ifndef DISABLE_WARNING_AS_ERROR
@@ -192,9 +195,10 @@ ifndef DISABLE_WARNING_AS_ERROR
 endif
 
 CFLAGS += $(WARNING_FLAGS) -I. -I./include $(PLATFORM_CCFLAGS) $(OPT)
-CXXFLAGS += $(WARNING_FLAGS) -I. -I./include $(PLATFORM_CXXFLAGS) $(OPT) -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers
+CXXFLAGS += $(WARNING_FLAGS) -I. -I./include $(PLATFORM_CXXFLAGS) $(OPT) -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers  \
+	-I../thirdparty/boost1.61.0/ -L../thirdparty/boost1.61.0/stage/lib
 
-LDFLAGS += $(PLATFORM_LDFLAGS)
+LDFLAGS += $(PLATFORM_LDFLAGS) -L../thirdparty/boost1.61.0/stage/lib
 
 date := $(shell date +%F)
 ifdef FORCE_GIT_SHA
