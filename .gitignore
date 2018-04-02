@@ -1,6 +1,7 @@
 TARGETS
 make_config.mk
 
+*btrace*
 *.a
 *.arc
 *.d
@@ -63,3 +64,4 @@ java/javadoc
 scan_build_report/
 t
 LOG
+run_skt.sh

@@ -265,6 +265,12 @@ DEFINE_bool(enable_numa, false,
             "CPU and memory of same node. Use \"$numactl --hardware\" command "
             "to see NUMA memory architecture.");
 
+//[[ogh: SKT. stats to log
+DEFINE_int64(stats_dump_period_sec, rocksdb::Options().stats_dump_period_sec, 
+	 		 "Stats are reported to LOG file "
+			 "every N seconds when this is greater than zero.");
+//]]ogh: SKT
+//
 DEFINE_int64(db_write_buffer_size, rocksdb::Options().db_write_buffer_size,
              "Number of bytes to buffer in all memtables before compacting");
 
@@ -2404,6 +2410,10 @@ class Benchmark {
     options.random_access_max_buffer_size = FLAGS_random_access_max_buffer_size;
     options.writable_file_max_buffer_size = FLAGS_writable_file_max_buffer_size;
     options.statistics = dbstats;
+	// ogh[[: SKT
+    options.stats_dump_period_sec = FLAGS_stats_dump_period_sec;
+	options.info_log_level = InfoLogLevel::WARN_LEVEL;
+	// ogh]]: SKT
     if (FLAGS_enable_io_prio) {
       FLAGS_env->LowerThreadPoolIOPriority(Env::LOW);
       FLAGS_env->LowerThreadPoolIOPriority(Env::HIGH);
