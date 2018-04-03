@@ -1,4 +1,4 @@
-# Workload for NV-Accel Simulation
+# Workload for *ASLog*
 
 ## Synthetic Workload Data
 Refer to [synthetic](synthetic)
