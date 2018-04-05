@@ -1,4 +1,6 @@
 > RocksDB version: 5.13.fb branch of github
+>
+> Author: Gihwan Oh (wurikiji@gmail.com)
 
 # compaction_job.cc
 

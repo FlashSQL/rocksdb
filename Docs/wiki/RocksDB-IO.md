@@ -1,5 +1,7 @@
 [홈페이지 원문](https://github.com/facebook/rocksdb/wiki/IO)
 
+> Author: Gihwan Oh (wurikiji@gmail.com)
+
 # RocksDB IO
 
 RocksDB는 앞으로 발생할 I/O에 대해서 유저가 원하는 방식으로 동작하도록 할 수 있는 몇 가지 옵션들을 지원한다.
