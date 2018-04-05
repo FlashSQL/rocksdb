@@ -83,16 +83,6 @@ Status CompactionJob::Run() {
 ```
 
 ```c++
-// STAGE_COMPACTION_PROCESS_KV 스테이지로 진입
-void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
-    // 통계를 위한 각종 IO 측정 변수및 헬퍼 메소드들이 사용됨. 
-    // cfd->ioptions()->comapction_filter 혹은
-    // sub_compact->compaction->CreateCompactionFilter().get() 을 통해서 필터 획득
-    // MergeHelper 를 통해 merge 수행을 준비 
-}
-```
-
-```c++
 // STAGE_COMPACTION_INSTALL 스테이지로 진입
 Status CompactionJob::Install(const MutableCFOoptions& mutable_cf_options) {
     
@@ -111,6 +101,18 @@ void CompactionJob::genSubcomapctionBoundaries() {
     // 정렬 후, 중복 되는 key 값을 제거
     // 2개 1쌍으로 묶어서 여러 쌍의 (start, end) range 를 만듬
     // 각 range를 통합하여 subcompaction에 사용할 boundary 쌍을 여러개 만듬
+}
+```
+
+```c++
+// STAGE_COMPACTION_PROCESS_KV 스테이지로 진입
+void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
+    // 통계를 위한 각종 IO 측정 변수및 헬퍼 메소드들이 사용됨. 
+    // cfd->ioptions()->comapction_filter 혹은
+    // sub_compact->compaction->CreateCompactionFilter().get() 을 통해서 필터 획득
+    // MergeHelper 를 통해 merge 수행을 준비. TODO: MergeHelper 상세 분석
+    
+    /* TODO: 시간을 잡고 집중해서 분석할 필요가 있음 */
 }
 ```
 
