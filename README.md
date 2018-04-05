@@ -10,7 +10,7 @@ You can see the progress [here](https://trello.com/b/sX6luTOp/rocksdb#)(\*Langua
 
 ## Optimize Compaction for ASLog
 
-Refer to [Strategies for optimizing ASLog](Docs/manual/Almost Sequential Log Data (ASL) 최적화 방안).
+Refer to [Strategies for optimizing ASLog](Docs/manual/Almost%20Sequential%20Log%20Data%20(ASL)%20최적화%20방안.md).
 
  
 
