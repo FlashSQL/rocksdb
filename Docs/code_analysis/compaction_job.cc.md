@@ -56,7 +56,9 @@ struct CompactionJob::CompactionState; // 전체 컴팩션 진행 상황
 
 ##### life cycle methods
 
-컴팩션 진행 순서에 따라 사용되는 메소드들.
+컴팩션 진행 순서에 따라 사용되는 메소드들. 스테이지 진행 순서는 [Compaction Stage](#Compaction Stage) 참조.
+
+db_impl_compaction_flush.cc 에서 `Prepare()`, `Run()`, `Install()` 순으로 호출 한다. `FinishCompactionOutputFile`의 경우에는 `CompactionJob` 클래스의 `ProcessKeyValueCompaction` 메소드 내부에서 호출 된다. 
 
 ```c++
 // STAGE_COMPACTION_PREPARE 스테이지로 진입
@@ -74,6 +76,7 @@ Status CompactionJob::Run() {
     // compaction 수행하는 메소드는 ProcessKeyvalueCompaction();
     
     // 리소스 관리의 효율성을 위해 0번 subcompaction은 현재 쓰레드에서 수행 
+    // ProcessKeyValueCompaction 에서 STAGE_COMPACTION_PROCESS_KV 스테이지로 진입
     ProcessKeyValueCompaction(&compact_ -> sub_compact_states[0]);
     
     // 전체 subcompaction 끝날때 까지 thread.join()
@@ -85,7 +88,34 @@ Status CompactionJob::Run() {
 ```c++
 // STAGE_COMPACTION_INSTALL 스테이지로 진입
 Status CompactionJob::Install(const MutableCFOoptions& mutable_cf_options) {
+    // delete할 파일을 deletion 목록에 저장.
+    InstallCompactionResults(mutable_cf_options);
     
+    // 각종 stat 정보 계산후 로그 저장. abort 된 애들 정리 
+    CleanupCompaction();
+}
+```
+
+```c++
+// STAGE_COMPACTION_SYNC_FILE 스테이지로 진입
+// 각 subcompaction 마다 따로 호출됨
+// ProcessKeyValueCompaction 메소드에서 직접 호출함
+Status CompactionJob::FinishCompactionOutputFile( /* ... */ ) {
+	// sync할 output 파일 갯수 획득
+    // sync할 start key, end key 획득
+    range_del_agg->AddToBuilder(); // 를 통해 range deletion 빌더 구성
+    
+    // builder는 TableBuilder 
+    // TODO: 분석이 필요함. 
+    sub_compact->builder->Finish(); // 를 통해 WriteBlock을 수행함
+    
+    sub_compact->outfile->Sync(db_options_.use_fsync); // 
+    sub_compact->outfile->Close(); 
+    
+    // 아웃풋이 전혀 생기지 않은 파일에 대해 파일 deletion 작업을 수행함
+    // TODO: 이거 필요없는듯  괜히 시스템콜 낭비, 위에서 Sync 호출되면 성능 저하.
+    // SstManagerImple 에 새로 생성한 파일 등록하고
+    sub_compact->builder.reset(); // 종료. 
 }
 ```
 
@@ -93,7 +123,7 @@ Status CompactionJob::Install(const MutableCFOoptions& mutable_cf_options) {
 
 ##### compaction methods
 
-실제 컴팩션 알고리즘을 수행하는 메소드들.
+실제 컴팩션 알고리즘을 수행하는 데 주요한 알고리즘을 구현하고 있는 메소드들.
 
 ```c++
 void CompactionJob::genSubcomapctionBoundaries() {
@@ -115,10 +145,3 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     /* TODO: 시간을 잡고 집중해서 분석할 필요가 있음 */
 }
 ```
-
-
-
-#####  helper methods
-
-컴팩션 알고리즘 수행시 필요한 정보들을 생성/관리하는 메소드들.
-
