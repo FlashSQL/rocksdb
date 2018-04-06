@@ -16,7 +16,7 @@ Refer to [Strategies for optimizing ASLog](Docs/manual/Almost%20Sequential%20Log
 
 ## Optimize TTL manager for ASLog
 
-Refer to [strategies for TTL data](Docs/manual/Optimizing TTL Manager.md)
+Refer to [strategies for TTL data](Docs/manual/Optimizing%20TTL%20Manager.md)
 
 
 
