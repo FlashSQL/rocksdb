@@ -123,7 +123,7 @@ Status CompactionJob::FinishCompactionOutputFile( /* ... */ ) {
 
 ##### compaction methods
 
-실제 컴팩션 알고리즘을 수행하는 데 주요한 알고리즘을 구현하고 있는 메소드들.
+실제 컴팩션을 수행하는 데 주요한 알고리즘을 구현하고 있는 메소드들.
 
 ```c++
 void CompactionJob::genSubcomapctionBoundaries() {
@@ -143,5 +143,16 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     // MergeHelper 를 통해 merge 수행을 준비. TODO: MergeHelper 상세 분석
     
     /* TODO: 시간을 잡고 집중해서 분석할 필요가 있음 */
+    
+    while (status.ok() && !cfd -> IsDropped() && c_iter->Valid()) {
+        // MergeHelper로 머지를 진행하고, c_iter로 계속 순회하면서 
+        // sub_compact->builder->Add()를 통해서 디비를 새로 생성 한다. 
+        // output file이 가득 차있는지 확인 하고 필요한 경우 새로운 파일로 교체 
+    }
+    // 필요한 통계 정보 저장하고 
+    
+    // 마지막 파일 close 하고
+    FinishCompactionOutputFile();
+    //input 리셋 하고 끝
 }
 ```
