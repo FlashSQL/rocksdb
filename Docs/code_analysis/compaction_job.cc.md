@@ -46,7 +46,7 @@ struct CompactionJob::CompactionState; // 전체 컴팩션 진행 상황
 
 
 
-### member method
+### member methods
 
 #### constructor
 
@@ -156,3 +156,4 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     //input 리셋 하고 끝
 }
 ```
+
