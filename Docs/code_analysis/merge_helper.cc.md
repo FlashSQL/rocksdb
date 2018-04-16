@@ -8,6 +8,8 @@
 
 본 문서의 분석은 [RocksDB 최적화](https://github.com/flashsql/rocksdb) 연구와 관련하여, 필요한 부분만을 선택해서 분석한 내용을 담고 있다. 최대한 간략하게 작성하려고 하였으며, 자세한 분석내용은 1차 작성 이후 연구 진행 상황에 따라서 리뷰 프로세스시에 추가된다.
 
+본 문서에서 다루는 `MergeHelper` 및 `MergeOperator`는 흔히 말하는 compaction에서의 merge가 아닌 RocksDB에서 여러 operation 수행에 따른 데이터 변환 작업을 의미하는, operation merge 작업이다. 
+
 
 
 ## class MergeHelper
