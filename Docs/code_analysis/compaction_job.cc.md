@@ -138,6 +138,11 @@ void CompactionJob::genSubcomapctionBoundaries() {
 // STAGE_COMPACTION_PROCESS_KV 스테이지로 진입
 void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     // 통계를 위한 각종 IO 측정 변수및 헬퍼 메소드들이 사용됨. 
+    
+    // MakeInputIterator를 통해서 merge된 iterator를 가져옴. 
+    // TODO: MakeInputIterator 분석 !!!!! 매우 중요 !!!!!!
+    std::unique_ptr<InternalIterator> input(versions_->MakeInputIterator()); 
+    
     // cfd->ioptions()->comapction_filter 혹은
     // sub_compact->compaction->CreateCompactionFilter().get() 을 통해서 필터 획득
     // MergeHelper 를 통해 merge 수행을 준비. TODO: MergeHelper 상세 분석
